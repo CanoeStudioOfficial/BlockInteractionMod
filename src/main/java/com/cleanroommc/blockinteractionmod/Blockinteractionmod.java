@@ -13,14 +13,14 @@ import net.minecraftforge.fml.common.registry.GameRegistry;
 import net.minecraft.client.resources.I18n;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
 import net.minecraftforge.common.config.Configuration;
 import net.minecraft.util.ResourceLocation;
 
 @Mod(modid = "blockinteractionmod", name = "BlockInteractionMod", version = "1.0")
 public class Blockinteractionmod {
-    private static List<Block> blockedBlocks = new ArrayList<Block>();
+    private static Set<Block> blockedBlocks = new HashSet<Block>();
     private static boolean defaultBlockInteraction;
 
     @Mod.EventHandler
@@ -56,8 +56,8 @@ public class Blockinteractionmod {
         }
     }
 
-    private static List<Block> getBlocksFromConfig(Configuration config, String category, String[] defaultValues) {
-        List<Block> blocks = new ArrayList<Block>();
+    private static Set<Block> getBlocksFromConfig(Configuration config, String category, String[] defaultValues) {
+        Set<Block> blocks = new HashSet<Block>();
         String[] blockNames = config.getStringList("blockedBlocks", category, defaultValues, "List of blocked block names");
         for (String blockName : blockNames) {
             Block block = GameRegistry.findRegistry(Block.class).getValue(new ResourceLocation(blockName));
