@@ -13,13 +13,15 @@ import net.minecraftforge.fml.common.event.FMLInitializationEvent;
 import net.minecraftforge.fml.common.eventhandler.EventPriority;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.registry.GameRegistry;
-import net.minecraft.client.resources.I18n;
-
-import java.io.File;
-import java.util.HashSet;
-import java.util.Set;
 import net.minecraftforge.common.config.Configuration;
 import net.minecraft.util.ResourceLocation;
+import java.io.File;
+import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.Set;
+import net.minecraft.client.resources.I18n;
 
 @Mod(modid = "blockinteractionmod", name = "BlockInteractionMod", version = "1.0")
 public class Blockinteractionmod {
@@ -63,6 +65,8 @@ public class Blockinteractionmod {
         Configuration config = new Configuration(new File("config/blockinteractionmod.cfg"));
         config.load();
 
+        backupConfigFile(config);
+
         defaultBlockInteraction = config.getBoolean("defaultBlockInteraction", "general", false,
                 "Whether block interaction is allowed by default");
 
@@ -76,6 +80,31 @@ public class Blockinteractionmod {
 
         if (config.hasChanged()) {
             config.save();
+        }
+    }
+
+
+    private static void backupConfigFile(Configuration config) {
+        File configFile = config.getConfigFile();
+        String configPath = configFile.getAbsolutePath();
+        String configDir = configFile.getParent();
+        String configName = configFile.getName();
+        String backupDir = configDir;
+
+
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMdd_HHmmss");
+        String timestamp = dateFormat.format(new Date());
+        String backupFileName = "old_" + timestamp + "_" + configName;
+
+
+        String backupFilePath = backupDir + "/" + backupFileName;
+
+
+        File backupFile = new File(backupFilePath);
+        try {
+            configFile.renameTo(backupFile);
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 
