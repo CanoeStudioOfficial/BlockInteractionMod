@@ -94,7 +94,7 @@ public class Blockinteractionmod {
 
         SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMdd_HHmmss");
         String timestamp = dateFormat.format(new Date());
-        String backupFileName = "old_" + timestamp + "_" + configName;
+        String backupFileName = configName.replace(".cfg", "_old_" + timestamp + ".old");
 
 
         String backupFilePath = backupDir + "/" + backupFileName;
