@@ -86,25 +86,28 @@ public class Blockinteractionmod {
 
     private static void backupConfigFile(Configuration config) {
         File configFile = config.getConfigFile();
-        String configPath = configFile.getAbsolutePath();
-        String configDir = configFile.getParent();
-        String configName = configFile.getName();
-        String backupDir = configDir;
+
+        if (config.hasChanged()) {
+            String configPath = configFile.getAbsolutePath();
+            String configDir = configFile.getParent();
+            String configName = configFile.getName();
+            String backupDir = configDir;
 
 
-        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMdd_HHmmss");
-        String timestamp = dateFormat.format(new Date());
-        String backupFileName = configName.replace(".cfg", "_old_" + timestamp + ".old");
+            SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMdd_HHmmss");
+            String timestamp = dateFormat.format(new Date());
+            String backupFileName = configName.replace(".cfg", "_old_" + timestamp + ".old.cfg");
 
 
-        String backupFilePath = backupDir + "/" + backupFileName;
+            String backupFilePath = configDir + "/" + backupFileName;
 
 
-        File backupFile = new File(backupFilePath);
-        try {
-            configFile.renameTo(backupFile);
-        } catch (Exception e) {
-            e.printStackTrace();
+            File backupFile = new File(backupFilePath);
+            try {
+                configFile.renameTo(backupFile);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
     }
 
