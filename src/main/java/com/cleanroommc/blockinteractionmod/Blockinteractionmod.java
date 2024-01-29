@@ -2,6 +2,9 @@ package com.cleanroommc.blockinteractionmod;
 
 import net.minecraft.block.Block;
 import net.minecraft.init.Blocks;
+import net.minecraft.item.Item;
+import net.minecraft.init.Items;
+import net.minecraft.item.ItemStack;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
@@ -21,6 +24,7 @@ import net.minecraft.util.ResourceLocation;
 @Mod(modid = "blockinteractionmod", name = "BlockInteractionMod", version = "1.0")
 public class Blockinteractionmod {
     private static Set<Block> blockedBlocks = new HashSet<Block>();
+    private static Set<Item> blockedItems = new HashSet<Item>();
     private static boolean defaultBlockInteraction;
 
     @Mod.EventHandler
@@ -40,6 +44,21 @@ public class Blockinteractionmod {
         }
     }
 
+    @SubscribeEvent(priority = EventPriority.HIGH)
+    public void onPlayerInteractItem(PlayerInteractEvent.RightClickItem event) {
+        if (event.getWorld().isRemote) return;
+
+        ItemStack heldItem = event.getItemStack();
+        if (isItemBlocked(heldItem)) {
+            event.setCanceled(true);
+            event.getEntityPlayer().sendMessage(new TextComponentString(I18n.format("blockinteractionmod.blockedItemMessage")));
+        }
+    }
+
+    private static boolean isItemBlocked(ItemStack itemStack) {
+        return blockedItems.contains(itemStack.getItem()) || itemStack.getItem() == Items.DIAMOND_SWORD;
+    }
+
     private static void loadConfig() {
         Configuration config = new Configuration(new File("config/blockinteractionmod.cfg"));
         config.load();
@@ -50,6 +69,10 @@ public class Blockinteractionmod {
         blockedBlocks.clear();
         String[] defaultBlockedBlocks = { Blocks.CRAFTING_TABLE.getRegistryName().toString() };
         blockedBlocks.addAll(getBlocksFromConfig(config, "blockedBlocks", defaultBlockedBlocks));
+
+        blockedItems.clear();
+        String[] defaultBlockedItems = { Items.DIAMOND_SWORD.getRegistryName().toString() };
+        blockedItems.addAll(getItemsFromConfig(config, "blockedItems", defaultBlockedItems));
 
         if (config.hasChanged()) {
             config.save();
@@ -66,5 +89,17 @@ public class Blockinteractionmod {
             }
         }
         return blocks;
+    }
+
+    private static Set<Item> getItemsFromConfig(Configuration config, String category, String[] defaultValues) {
+        Set<Item> items = new HashSet<Item>();
+        String[] itemNames = config.getStringList("blockedItems", category, defaultValues, "List of blocked item names");
+        for (String itemName : itemNames) {
+            Item item = GameRegistry.findRegistry(Item.class).getValue(new ResourceLocation(itemName));
+            if (item != null) {
+                items.add(item);
+            }
+        }
+        return items;
     }
 }
