@@ -1,4 +1,4 @@
-package com.cleanroommc.blockinteractionmod;
+package com.lonelyxiya.blockinteractionmod;
 
 import net.minecraft.block.Block;
 import net.minecraft.init.Blocks;
