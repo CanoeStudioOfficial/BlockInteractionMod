@@ -78,25 +78,55 @@ public class Blockinteractionmod {
 
     private static void loadConfig() {
         Configuration config = new Configuration(new File("config/blockinteractionmod.cfg"));
-        config.load();
+        try {
+            config.load();
+            backupConfigFile(config);
 
-        backupConfigFile(config);
+            defaultBlockInteraction = config.getBoolean("defaultBlockInteraction", "general", false,
+                    "Whether block interaction is allowed by default");
 
-        defaultBlockInteraction = config.getBoolean("defaultBlockInteraction", "general", false,
-                "Whether block interaction is allowed by default");
+            blockedBlocks.clear();
+            Set<BlockData> defaultBlockedBlocks = new HashSet<BlockData>();
+            defaultBlockedBlocks.add(new BlockData(Blocks.CRAFTING_TABLE, 0)); // Example default blocked block with metadata 0
+            Set<BlockData> configBlocks = getBlocksFromConfig(config, "blockedBlocks", new HashSet<>());
+            for (BlockData defaultBlock : defaultBlockedBlocks) {
+                boolean isInConfig = false;
+                for (BlockData configBlock : configBlocks) {
+                    if (defaultBlock.block == configBlock.block && defaultBlock.meta == configBlock.meta) {
+                        isInConfig = true;
+                        break;
+                    }
+                }
+                if (!isInConfig) {
+                    configBlocks.add(defaultBlock);
+                }
+            }
+            blockedBlocks.addAll(configBlocks);
 
-        blockedBlocks.clear();
-        Set<BlockData> defaultBlockedBlocks = new HashSet<BlockData>();
-        defaultBlockedBlocks.add(new BlockData(Blocks.CRAFTING_TABLE, 0)); // Example default blocked block with metadata 0
-        blockedBlocks.addAll(getBlocksFromConfig(config, "blockedBlocks", defaultBlockedBlocks));
+            blockedItems.clear();
+            Set<ItemData> defaultBlockedItems = new HashSet<ItemData>();
+            defaultBlockedItems.add(new ItemData(Items.DIAMOND_SWORD, 0)); // Example default blocked item with metadata 0
+            Set<ItemData> configItems = getItemsFromConfig(config, "blockedItems", new HashSet<>());
+            for (ItemData defaultItem : defaultBlockedItems) {
+                boolean isInConfig = false;
+                for (ItemData configItem : configItems) {
+                    if (defaultItem.item == configItem.item && defaultItem.meta == configItem.meta) {
+                        isInConfig = true;
+                        break;
+                    }
+                }
+                if (!isInConfig) {
+                    configItems.add(defaultItem);
+                }
+            }
+            blockedItems.addAll(configItems);
 
-        blockedItems.clear();
-        Set<ItemData> defaultBlockedItems = new HashSet<ItemData>();
-        defaultBlockedItems.add(new ItemData(Items.DIAMOND_SWORD, 0)); // Example default blocked item with metadata 0
-        blockedItems.addAll(getItemsFromConfig(config, "blockedItems", defaultBlockedItems));
-
-        if (config.hasChanged()) {
-            config.save();
+            if (config.hasChanged()) {
+                config.save();
+            }
+        } catch (Exception e) {
+            // 记录日志或者向玩家发送错误提示
+            System.err.println("Error loading configuration file: " + e.getMessage());
         }
     }
 
