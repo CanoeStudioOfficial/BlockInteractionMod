@@ -29,6 +29,20 @@ public class Blockinteractionmod {
     private static Set<ItemData> blockedItems = new HashSet<ItemData>();
     private static boolean defaultBlockInteraction;
 
+    private static class MultiBlockData {
+        private Set<BlockData> blockSet;
+
+        public MultiBlockData(Set<BlockData> blockSet) {
+            this.blockSet = blockSet;
+        }
+
+        public Set<BlockData> getBlockSet() {
+            return blockSet;
+        }
+    }
+
+    private static Set<MultiBlockData> blockedMultiBlocks = new HashSet<>();
+
     @Mod.EventHandler
     public void init(FMLInitializationEvent event) {
         MinecraftForge.EVENT_BUS.register(this);
@@ -43,6 +57,37 @@ public class Blockinteractionmod {
         if (isBlocked(block, meta)) {
             event.setCanceled(true);
             event.getEntityPlayer().sendMessage(new TextComponentString(I18n.format("blockinteractionmod.blockedBlockMessage")));
+            return;
+        }
+        for (MultiBlockData multiBlock : blockedMultiBlocks) {
+            Set<BlockData> blockSet = multiBlock.getBlockSet();
+            boolean isMultiBlockPresent = true;
+            for (BlockData data : blockSet) {
+                boolean found = false;
+                for (int x = -1; x <= 1; x++) {
+                    for (int y = -1; y <= 1; y++) {
+                        for (int z = -1; z <= 1; z++) {
+                            Block checkBlock = event.getWorld().getBlockState(event.getPos().add(x, y, z)).getBlock();
+                            int checkMeta = event.getWorld().getBlockState(event.getPos().add(x, y, z)).getBlock().getMetaFromState(event.getWorld().getBlockState(event.getPos().add(x, y, z)));
+                            if (checkBlock == data.block && checkMeta == data.meta) {
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (found) break;
+                    }
+                    if (found) break;
+                }
+                if (!found) {
+                    isMultiBlockPresent = false;
+                    break;
+                }
+            }
+            if (isMultiBlockPresent) {
+                event.setCanceled(true);
+                event.getEntityPlayer().sendMessage(new TextComponentString(I18n.format("blockinteractionmod.blockedMultiBlockMessage")));
+                return;
+            }
         }
     }
 
@@ -80,6 +125,7 @@ public class Blockinteractionmod {
         Configuration config = new Configuration(new File("config/blockinteractionmod.cfg"));
         try {
             config.load();
+
             backupConfigFile(config);
 
             defaultBlockInteraction = config.getBoolean("defaultBlockInteraction", "general", false,
@@ -121,11 +167,37 @@ public class Blockinteractionmod {
             }
             blockedItems.addAll(configItems);
 
+            blockedMultiBlocks.clear();
+            String[] multiBlockConfigs = config.getStringList("blockedMultiBlocks", "general", new String[]{}, "List of blocked multi - block structures");
+            for (String multiBlockConfig : multiBlockConfigs) {
+                String[] blockConfigs = multiBlockConfig.split(";");
+                Set<BlockData> blockSet = new HashSet<>();
+                for (String blockConfig : blockConfigs) {
+                    String[] parts = blockConfig.split(":");
+                    if (parts.length == 2) {
+                        Block block = GameRegistry.findRegistry(Block.class).getValue(new ResourceLocation(parts[0], parts[1]));
+                        if (block != null) {
+                            int meta = 0;
+                            if (parts.length == 3) {
+                                try {
+                                    meta = Integer.parseInt(parts[2]);
+                                } catch (NumberFormatException e) {
+                                    // 处理无效的元数据
+                                }
+                            }
+                            blockSet.add(new BlockData(block, meta));
+                        }
+                    }
+                }
+                if (!blockSet.isEmpty()) {
+                    blockedMultiBlocks.add(new MultiBlockData(blockSet));
+                }
+            }
+
             if (config.hasChanged()) {
                 config.save();
             }
         } catch (Exception e) {
-            // 记录日志或者向玩家发送错误提示
             System.err.println("Error loading configuration file: " + e.getMessage());
         }
     }
