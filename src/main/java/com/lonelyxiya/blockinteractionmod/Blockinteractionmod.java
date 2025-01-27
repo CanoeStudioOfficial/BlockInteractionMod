@@ -130,29 +130,29 @@ public class Blockinteractionmod {
             config.load();
             backupConfigFile(config);
 
+            // 读取 defaultBlockInteraction 配置项
             defaultBlockInteraction = config.getBoolean("defaultBlockInteraction", "general", false,
                     "Whether block interaction is allowed by default");
 
             blockedBlocks.clear();
+            // 读取 defaultBlockedBlocks 配置项
             Set<BlockData> defaultBlockedBlocks = getDefaultBlockedBlocks(config);
-            Set<BlockData> configBlocks = getBlocksFromConfig(config, "blockedBlocks", new HashSet<>());
-            mergeBlockData(defaultBlockedBlocks, configBlocks);
-            blockedBlocks.addAll(configBlocks);
+            blockedBlocks.addAll(defaultBlockedBlocks);
 
             blockedItems.clear();
+            // 读取 defaultBlockedItems 配置项
             Set<ItemData> defaultBlockedItems = getDefaultBlockedItems(config);
-            Set<ItemData> configItems = getItemsFromConfig(config, "blockedItems", new HashSet<>());
-            mergeItemData(defaultBlockedItems, configItems);
-            blockedItems.addAll(configItems);
+            blockedItems.addAll(defaultBlockedItems);
 
             blockedMultiBlocks.clear();
+            // 读取 blockedMultiBlocks 配置项
             String[] multiBlockConfigs = config.getStringList("blockedMultiBlocks", "general", new String[]{}, "List of blocked multi - block structures");
             for (String multiBlockConfig : multiBlockConfigs) {
                 String[] blockConfigs = multiBlockConfig.split(";");
                 Set<BlockData> blockSet = new HashSet<>();
                 for (String blockConfig : blockConfigs) {
                     String[] parts = blockConfig.split(":");
-                    if (parts.length == 2) {
+                    if (parts.length >= 2) {
                         Block block = GameRegistry.findRegistry(Block.class).getValue(new ResourceLocation(parts[0], parts[1]));
                         if (block != null) {
                             int meta = 0;
@@ -160,10 +160,12 @@ public class Blockinteractionmod {
                                 try {
                                     meta = Integer.parseInt(parts[2]);
                                 } catch (NumberFormatException e) {
-                                    // 处理无效的元数据
+                                    System.err.println("Invalid metadata for block: " + blockConfig);
                                 }
                             }
                             blockSet.add(new BlockData(block, meta));
+                        } else {
+                            System.err.println("Block not found: " + parts[0] + ":" + parts[1]);
                         }
                     }
                 }
@@ -179,6 +181,7 @@ public class Blockinteractionmod {
             System.err.println("Error loading configuration file: " + e.getMessage());
         }
     }
+
 
     private static Set<BlockData> getDefaultBlockedBlocks(Configuration config) {
         Set<BlockData> defaultBlocks = new HashSet<>();
