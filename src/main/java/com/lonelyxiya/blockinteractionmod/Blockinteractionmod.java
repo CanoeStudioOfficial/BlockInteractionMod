@@ -16,11 +16,6 @@ import net.minecraftforge.fml.common.registry.GameRegistry;
 import net.minecraftforge.common.config.Configuration;
 import net.minecraftforge.common.config.Property;
 import net.minecraft.util.ResourceLocation;
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.HashSet;
 import java.util.Set;
 import net.minecraft.client.resources.I18n;
@@ -128,7 +123,6 @@ public class Blockinteractionmod {
         Configuration config = new Configuration(new File("config/blockinteractionmod.cfg"));
         try {
             config.load();
-            backupConfigFile(config);
 
             // 读取 defaultBlockInteraction 配置项
             defaultBlockInteraction = config.getBoolean("defaultBlockInteraction", "general", false,
@@ -154,7 +148,7 @@ public class Blockinteractionmod {
                     String[] parts = blockConfig.split(":");
                     if (parts.length >= 2) {
                         Block block = GameRegistry.findRegistry(Block.class).getValue(new ResourceLocation(parts[0], parts[1]));
-                        if (block != null) {
+                        if (block!= null) {
                             int meta = 0;
                             if (parts.length == 3) {
                                 try {
@@ -190,7 +184,7 @@ public class Blockinteractionmod {
             String[] parts = blockName.split(":");
             if (parts.length >= 2) {
                 Block block = GameRegistry.findRegistry(Block.class).getValue(new ResourceLocation(parts[0], parts[1]));
-                if (block != null) {
+                if (block!= null) {
                     int meta = 0;
                     if (parts.length == 3) {
                         try {
@@ -215,7 +209,7 @@ public class Blockinteractionmod {
             String[] parts = itemName.split(":");
             if (parts.length >= 2) {
                 Item item = GameRegistry.findRegistry(Item.class).getValue(new ResourceLocation(parts[0], parts[1]));
-                if (item != null) {
+                if (item!= null) {
                     int meta = 0;
                     if (parts.length == 3) {
                         try {
@@ -263,20 +257,6 @@ public class Blockinteractionmod {
         }
     }
 
-    private static void backupConfigFile(Configuration config) {
-        File configFile = config.getConfigFile();
-        Path source = Paths.get(configFile.getAbsolutePath());
-        java.util.Date now = new java.util.Date();
-        java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyyMMddHHmmss");
-        String backupFileName = configFile.getName().replace(".cfg", "_" + sdf.format(now) + ".cfg");
-        Path backup = Paths.get(configFile.getParent(), backupFileName);
-        try {
-            Files.copy(source, backup);
-        } catch (IOException e) {
-            System.err.println("Failed to backup configuration file: " + e.getMessage());
-        }
-    }
-
     private static Set<BlockData> getBlocksFromConfig(Configuration config, String category, Set<BlockData> defaultValues) {
         Set<BlockData> blocks = new HashSet<>();
         String[] blockNames = config.getStringList("blockedBlocks", category, getBlockDataAsStringArray(defaultValues), "List of blocked block names");
@@ -284,7 +264,7 @@ public class Blockinteractionmod {
             String[] parts = blockName.split(":");
             if (parts.length == 2) {
                 Block block = GameRegistry.findRegistry(Block.class).getValue(new ResourceLocation(parts[0], parts[1]));
-                if (block != null) {
+                if (block!= null) {
                     int meta = 0; // Default meta if not specified
                     if (parts.length == 3) {
                         try {
@@ -307,7 +287,7 @@ public class Blockinteractionmod {
             String[] parts = itemName.split(":");
             if (parts.length == 2) {
                 Item item = GameRegistry.findRegistry(Item.class).getValue(new ResourceLocation(parts[0], parts[1]));
-                if (item != null) {
+                if (item!= null) {
                     int meta = 0; // Default meta if not specified
                     if (parts.length == 3) {
                         try {
