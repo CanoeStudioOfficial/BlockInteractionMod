@@ -14,17 +14,20 @@ import net.minecraftforge.fml.common.eventhandler.EventPriority;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.registry.GameRegistry;
 import net.minecraftforge.common.config.Configuration;
+import net.minecraftforge.common.config.Property;
 import net.minecraft.util.ResourceLocation;
 import java.io.File;
 import java.io.IOException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.HashSet;
 import java.util.Set;
 import net.minecraft.client.resources.I18n;
 
 @Mod(modid = "blockinteractionmod", name = "BlockInteractionMod", version = "1.0")
 public class Blockinteractionmod {
+
     private static Set<BlockData> blockedBlocks = new HashSet<>();
     private static Set<ItemData> blockedItems = new HashSet<>();
     private static boolean defaultBlockInteraction;
@@ -51,21 +54,34 @@ public class Blockinteractionmod {
 
     @SubscribeEvent(priority = EventPriority.HIGH)
     public void onPlayerInteract(PlayerInteractEvent.RightClickBlock event) {
-        if (event.getWorld() == null || event.getWorld().isRemote) return;
-
+        if (event.getWorld().isRemote) return;
         Block block = event.getWorld().getBlockState(event.getPos()).getBlock();
-        int meta = getMetaFromState(event);
+        int meta = event.getWorld().getBlockState(event.getPos()).getBlock().getMetaFromState(event.getWorld().getBlockState(event.getPos()));
         if (isBlocked(block, meta)) {
             event.setCanceled(true);
             event.getEntityPlayer().sendMessage(new TextComponentString(I18n.format("blockinteractionmod.blockedBlockMessage")));
             return;
         }
-
         for (MultiBlockData multiBlock : blockedMultiBlocks) {
             Set<BlockData> blockSet = multiBlock.getBlockSet();
             boolean isMultiBlockPresent = true;
             for (BlockData data : blockSet) {
-                if (!checkMultiBlockPresence(event, data)) {
+                boolean found = false;
+                for (int x = -1; x <= 1; x++) {
+                    for (int y = -1; y <= 1; y++) {
+                        for (int z = -1; z <= 1; z++) {
+                            Block checkBlock = event.getWorld().getBlockState(event.getPos().add(x, y, z)).getBlock();
+                            int checkMeta = event.getWorld().getBlockState(event.getPos().add(x, y, z)).getBlock().getMetaFromState(event.getWorld().getBlockState(event.getPos().add(x, y, z)));
+                            if (checkBlock == data.block && checkMeta == data.meta) {
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (found) break;
+                    }
+                    if (found) break;
+                }
+                if (!found) {
                     isMultiBlockPresent = false;
                     break;
                 }
@@ -80,7 +96,7 @@ public class Blockinteractionmod {
 
     @SubscribeEvent(priority = EventPriority.HIGH)
     public void onPlayerInteractItem(PlayerInteractEvent.RightClickItem event) {
-        if (event.getWorld() == null || event.getItemStack() == null || event.getWorld().isRemote) return;
+        if (event.getWorld().isRemote) return;
 
         ItemStack heldItem = event.getItemStack();
         int meta = heldItem.getMetadata();
@@ -91,11 +107,21 @@ public class Blockinteractionmod {
     }
 
     private static boolean isBlocked(Block block, int meta) {
-        return blockedBlocks.stream().anyMatch(blockedBlock -> blockedBlock.block == block && blockedBlock.meta == meta);
+        for (BlockData blockedBlock : blockedBlocks) {
+            if (blockedBlock.block == block && blockedBlock.meta == meta) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean isBlocked(Item item, int meta) {
-        return blockedItems.stream().anyMatch(blockedItem -> blockedItem.item == item && blockedItem.meta == meta);
+        for (ItemData blockedItem : blockedItems) {
+            if (blockedItem.item == item && blockedItem.meta == meta) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void loadConfig() {
@@ -103,24 +129,48 @@ public class Blockinteractionmod {
         try {
             config.load();
             backupConfigFile(config);
-            defaultBlockInteraction = config.getBoolean("defaultBlockInteraction", "general", false, "Whether block interaction is allowed by default");
+
+            defaultBlockInteraction = config.getBoolean("defaultBlockInteraction", "general", false,
+                    "Whether block interaction is allowed by default");
 
             blockedBlocks.clear();
-            Set<BlockData> defaultBlockedBlocks = new HashSet<>();
-            defaultBlockedBlocks.add(new BlockData(Blocks.CRAFTING_TABLE, 0)); // Example default blocked block with metadata 0
+            Set<BlockData> defaultBlockedBlocks = getDefaultBlockedBlocks(config);
             Set<BlockData> configBlocks = getBlocksFromConfig(config, "blockedBlocks", new HashSet<>());
             mergeBlockData(defaultBlockedBlocks, configBlocks);
             blockedBlocks.addAll(configBlocks);
 
             blockedItems.clear();
-            Set<ItemData> defaultBlockedItems = new HashSet<>();
-            defaultBlockedItems.add(new ItemData(Items.DIAMOND_SWORD, 0)); // Example default blocked item with metadata 0
+            Set<ItemData> defaultBlockedItems = getDefaultBlockedItems(config);
             Set<ItemData> configItems = getItemsFromConfig(config, "blockedItems", new HashSet<>());
             mergeItemData(defaultBlockedItems, configItems);
             blockedItems.addAll(configItems);
 
             blockedMultiBlocks.clear();
-            loadBlockedMultiBlocks(config);
+            String[] multiBlockConfigs = config.getStringList("blockedMultiBlocks", "general", new String[]{}, "List of blocked multi - block structures");
+            for (String multiBlockConfig : multiBlockConfigs) {
+                String[] blockConfigs = multiBlockConfig.split(";");
+                Set<BlockData> blockSet = new HashSet<>();
+                for (String blockConfig : blockConfigs) {
+                    String[] parts = blockConfig.split(":");
+                    if (parts.length == 2) {
+                        Block block = GameRegistry.findRegistry(Block.class).getValue(new ResourceLocation(parts[0], parts[1]));
+                        if (block != null) {
+                            int meta = 0;
+                            if (parts.length == 3) {
+                                try {
+                                    meta = Integer.parseInt(parts[2]);
+                                } catch (NumberFormatException e) {
+                                    // 处理无效的元数据
+                                }
+                            }
+                            blockSet.add(new BlockData(block, meta));
+                        }
+                    }
+                }
+                if (!blockSet.isEmpty()) {
+                    blockedMultiBlocks.add(new MultiBlockData(blockSet));
+                }
+            }
 
             if (config.hasChanged()) {
                 config.save();
@@ -130,77 +180,98 @@ public class Blockinteractionmod {
         }
     }
 
-    private static int getMetaFromState(PlayerInteractEvent.RightClickBlock event) {
-        return event.getWorld().getBlockState(event.getPos()).getBlock().getMetaFromState(event.getWorld().getBlockState(event.getPos()));
-    }
-
-    private static boolean checkMultiBlockPresence(PlayerInteractEvent.RightClickBlock event, BlockData data) {
-        for (int x = -1; x <= 1; x++) {
-            for (int y = -1; y <= 1; y++) {
-                for (int z = -1; z <= 1; z++) {
-                    Block checkBlock = event.getWorld().getBlockState(event.getPos().add(x, y, z)).getBlock();
-                    int checkMeta = getMetaFromState(event);
-                    if (checkBlock == data.block && checkMeta == data.meta) {
-                        return true;
+    private static Set<BlockData> getDefaultBlockedBlocks(Configuration config) {
+        Set<BlockData> defaultBlocks = new HashSet<>();
+        String[] defaultBlockNames = config.getStringList("defaultBlockedBlocks", "general", new String[]{"minecraft:crafting_table:0"}, "List of default blocked blocks");
+        for (String blockName : defaultBlockNames) {
+            String[] parts = blockName.split(":");
+            if (parts.length >= 2) {
+                Block block = GameRegistry.findRegistry(Block.class).getValue(new ResourceLocation(parts[0], parts[1]));
+                if (block != null) {
+                    int meta = 0;
+                    if (parts.length == 3) {
+                        try {
+                            meta = Integer.parseInt(parts[2]);
+                        } catch (NumberFormatException e) {
+                            System.err.println("Invalid metadata for default block: " + blockName);
+                        }
                     }
+                    defaultBlocks.add(new BlockData(block, meta));
+                } else {
+                    System.err.println("Block not found for default block: " + blockName);
                 }
             }
         }
-        return false;
+        return defaultBlocks;
     }
 
-    private static void mergeBlockData(Set<BlockData> defaultBlockedBlocks, Set<BlockData> configBlocks) {
-        for (BlockData defaultBlock : defaultBlockedBlocks) {
-            if (!configBlocks.contains(defaultBlock)) {
-                configBlocks.add(defaultBlock);
-            }
-        }
-    }
-
-    private static void mergeItemData(Set<ItemData> defaultBlockedItems, Set<ItemData> configItems) {
-        for (ItemData defaultItem : defaultBlockedItems) {
-            if (!configItems.contains(defaultItem)) {
-                configItems.add(defaultItem);
-            }
-        }
-    }
-
-    private static void loadBlockedMultiBlocks(Configuration config) {
-        String[] multiBlockConfigs = config.getStringList("blockedMultiBlocks", "general", new String[]{}, "List of blocked multi-block structures");
-        for (String multiBlockConfig : multiBlockConfigs) {
-            String[] blockConfigs = multiBlockConfig.split(";");
-            Set<BlockData> blockSet = new HashSet<>();
-            for (String blockConfig : blockConfigs) {
-                String[] parts = blockConfig.split(":");
-                if (parts.length == 2) {
-                    Block block = GameRegistry.findRegistry(Block.class).getValue(new ResourceLocation(parts[0], parts[1]));
-                    if (block != null) {
-                        int meta = parseMeta(parts);
-                        blockSet.add(new BlockData(block, meta));
+    private static Set<ItemData> getDefaultBlockedItems(Configuration config) {
+        Set<ItemData> defaultItems = new HashSet<>();
+        String[] defaultItemNames = config.getStringList("defaultBlockedItems", "general", new String[]{"minecraft:diamond_sword:0"}, "List of default blocked items");
+        for (String itemName : defaultItemNames) {
+            String[] parts = itemName.split(":");
+            if (parts.length >= 2) {
+                Item item = GameRegistry.findRegistry(Item.class).getValue(new ResourceLocation(parts[0], parts[1]));
+                if (item != null) {
+                    int meta = 0;
+                    if (parts.length == 3) {
+                        try {
+                            meta = Integer.parseInt(parts[2]);
+                        } catch (NumberFormatException e) {
+                            System.err.println("Invalid metadata for default item: " + itemName);
+                        }
                     }
+                    defaultItems.add(new ItemData(item, meta));
+                } else {
+                    System.err.println("Item not found for default item: " + itemName);
                 }
             }
-            if (!blockSet.isEmpty()) {
-                blockedMultiBlocks.add(new MultiBlockData(blockSet));
+        }
+        return defaultItems;
+    }
+
+    private static void mergeBlockData(Set<BlockData> defaultSet, Set<BlockData> configSet) {
+        for (BlockData defaultBlock : defaultSet) {
+            boolean isInConfig = false;
+            for (BlockData configBlock : configSet) {
+                if (defaultBlock.block == configBlock.block && defaultBlock.meta == configBlock.meta) {
+                    isInConfig = true;
+                    break;
+                }
+            }
+            if (!isInConfig) {
+                configSet.add(defaultBlock);
             }
         }
     }
 
-    private static int parseMeta(String[] parts) {
-        int meta = 0;
-        if (parts.length == 3) {
-            try {
-                meta = Integer.parseInt(parts[2]);
-            } catch (NumberFormatException e) {
-                // Handle invalid metadata
+    private static void mergeItemData(Set<ItemData> defaultSet, Set<ItemData> configSet) {
+        for (ItemData defaultItem : defaultSet) {
+            boolean isInConfig = false;
+            for (ItemData configItem : configSet) {
+                if (defaultItem.item == configItem.item && defaultItem.meta == configItem.meta) {
+                    isInConfig = true;
+                    break;
+                }
+            }
+            if (!isInConfig) {
+                configSet.add(defaultItem);
             }
         }
-        return meta;
     }
 
     private static void backupConfigFile(Configuration config) {
         File configFile = config.getConfigFile();
-        // Backup logic remains the same
+        Path source = Paths.get(configFile.getAbsolutePath());
+        java.util.Date now = new java.util.Date();
+        java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyyMMddHHmmss");
+        String backupFileName = configFile.getName().replace(".cfg", "_" + sdf.format(now) + ".cfg");
+        Path backup = Paths.get(configFile.getParent(), backupFileName);
+        try {
+            Files.copy(source, backup);
+        } catch (IOException e) {
+            System.err.println("Failed to backup configuration file: " + e.getMessage());
+        }
     }
 
     private static Set<BlockData> getBlocksFromConfig(Configuration config, String category, Set<BlockData> defaultValues) {
@@ -211,7 +282,14 @@ public class Blockinteractionmod {
             if (parts.length == 2) {
                 Block block = GameRegistry.findRegistry(Block.class).getValue(new ResourceLocation(parts[0], parts[1]));
                 if (block != null) {
-                    int meta = parseMeta(parts);
+                    int meta = 0; // Default meta if not specified
+                    if (parts.length == 3) {
+                        try {
+                            meta = Integer.parseInt(parts[2]);
+                        } catch (NumberFormatException e) {
+                            // Handle invalid metadata
+                        }
+                    }
                     blocks.add(new BlockData(block, meta));
                 }
             }
@@ -227,7 +305,14 @@ public class Blockinteractionmod {
             if (parts.length == 2) {
                 Item item = GameRegistry.findRegistry(Item.class).getValue(new ResourceLocation(parts[0], parts[1]));
                 if (item != null) {
-                    int meta = parseMeta(parts);
+                    int meta = 0; // Default meta if not specified
+                    if (parts.length == 3) {
+                        try {
+                            meta = Integer.parseInt(parts[2]);
+                        } catch (NumberFormatException e) {
+                            // Handle invalid metadata
+                        }
+                    }
                     items.add(new ItemData(item, meta));
                 }
             }
@@ -263,21 +348,8 @@ public class Blockinteractionmod {
         }
 
         @Override
-        public boolean equals(Object obj) {
-            if (this == obj) return true;
-            if (obj == null || getClass() != obj.getClass()) return false;
-            BlockData that = (BlockData) obj;
-            return meta == that.meta && block.equals(that.block);
-        }
-
-        @Override
-        public int hashCode() {
-            return 31 * block.hashCode() + meta;
-        }
-
-        @Override
         public String toString() {
-            return block.getRegistryName() + ":" + meta;
+            return block.getRegistryName().toString() + ":" + meta;
         }
     }
 
@@ -291,21 +363,8 @@ public class Blockinteractionmod {
         }
 
         @Override
-        public boolean equals(Object obj) {
-            if (this == obj) return true;
-            if (obj == null || getClass() != obj.getClass()) return false;
-            ItemData that = (ItemData) obj;
-            return meta == that.meta && item.equals(that.item);
-        }
-
-        @Override
-        public int hashCode() {
-            return 31 * item.hashCode() + meta;
-        }
-
-        @Override
         public String toString() {
-            return item.getRegistryName() + ":" + meta;
+            return item.getRegistryName().toString() + ":" + meta;
         }
     }
 }
